@@ -1,0 +1,28 @@
+#!/bin/sh
+# {{ name }}: Linux side of a border leaf. Generated from intent/fabric.yml by fabctl render.
+# No servers here: only the tenant with internet access, and the cable to the ISP inside it.
+# Safe to run again: anything that already exists is left as it is.
+set -e
+exists() { ip link show "$1" >/dev/null 2>&1; }
+
+# Forward packets, and enable IPv6: BGP unnumbered talks over IPv6 link local addresses.
+sysctl -qw net.ipv4.ip_forward=1 net.ipv6.conf.all.forwarding=1
+sysctl -qw net.ipv6.conf.all.disable_ipv6=0 net.ipv6.conf.default.disable_ipv6=0
+{% for port in ports %}
+sysctl -qw net.ipv6.conf.{{ port.name }}.disable_ipv6=0
+ip link set {{ port.name }} up
+{% endfor %}
+{% if tenant %}
+
+# Tenant {{ tenant.name }}: its own routing table (VRF), and L3VNI {{ tenant.l3vni }} carrying its routed traffic
+exists {{ tenant.name }} || ip link add {{ tenant.name }} type vrf table {{ tenant.l3vni }}
+ip link set {{ tenant.name }} up
+exists br{{ tenant.l3vni }} || ip link add br{{ tenant.l3vni }} type bridge
+ip link set br{{ tenant.l3vni }} master {{ tenant.name }} up
+exists vx{{ tenant.l3vni }} || ip link add vx{{ tenant.l3vni }} mtu 1500 type vxlan id {{ tenant.l3vni }} local {{ loopback }} dstport 4789 nolearning
+ip link set vx{{ tenant.l3vni }} master br{{ tenant.l3vni }} up
+
+# The cable to the ISP sits inside the {{ tenant.name }} VRF: nothing else can reach the outside.
+ip link set {{ isp.port }} master {{ tenant.name }} up
+ip addr replace {{ isp.address }} dev {{ isp.port }}
+{% endif %}

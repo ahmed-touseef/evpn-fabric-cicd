@@ -1,0 +1,110 @@
+! {{ name }}: border leaf. Generated from intent/fabric.yml by fabctl render; do not edit by hand.
+frr version 10.2.1
+frr defaults datacenter
+hostname {{ name }}
+log syslog informational
+service integrated-vtysh-config
+!
+{% if tenant %}
+vrf {{ tenant.name }}
+ vni {{ tenant.l3vni }}
+ ! Our own address space ends here: a packet for an unused {{ tenant.summary }} address is
+ ! dropped, instead of following the default route back to the ISP in a loop.
+ ip route {{ tenant.summary }} blackhole
+exit-vrf
+!
+{% endif %}
+interface lo
+ ip address {{ loopback }}/32
+exit
+!
+{% for port in ports %}
+interface {{ port.name }}
+ description to {{ port.peer }}
+exit
+!
+{% endfor %}
+{% if tenant %}
+interface {{ isp.port }}
+ description to isp
+exit
+!
+{% endif %}
+bfd
+ profile FABRIC
+  transmit-interval {{ bfd.interval_ms }}
+  receive-interval {{ bfd.interval_ms }}
+  detect-multiplier {{ bfd.multiplier }}
+ exit
+exit
+!
+router bgp {{ asn }}
+ bgp router-id {{ loopback }}
+ bgp bestpath as-path multipath-relax
+ neighbor FABRIC peer-group
+ neighbor FABRIC remote-as external
+ neighbor FABRIC bfd profile FABRIC
+{% for port in ports %}
+ neighbor {{ port.name }} interface peer-group FABRIC
+{% endfor %}
+ !
+ address-family ipv4 unicast
+  network {{ loopback }}/32
+  neighbor FABRIC route-map LOOPBACKS-ONLY in
+  neighbor FABRIC route-map LOOPBACKS-ONLY out
+ exit-address-family
+ !
+ address-family l2vpn evpn
+  neighbor FABRIC activate
+  advertise-all-vni
+ exit-address-family
+exit
+!
+{% if tenant %}
+router bgp {{ asn }} vrf {{ tenant.name }}
+ bgp router-id {{ loopback }}
+ bgp bestpath as-path multipath-relax
+ neighbor {{ isp.peer }} remote-as {{ isp.asn }}
+ neighbor {{ isp.peer }} description isp
+ !
+ address-family ipv4 unicast
+  network {{ tenant.summary }}
+  neighbor {{ isp.peer }} route-map FROM-ISP in
+  neighbor {{ isp.peer }} route-map TO-ISP out
+ exit-address-family
+ !
+ address-family l2vpn evpn
+  advertise ipv4 unicast route-map DEFAULT-ONLY
+  route-target import {{ rt }}:{{ tenant.l3vni }}
+  route-target export {{ rt }}:{{ tenant.l3vni }}
+ exit-address-family
+exit
+!
+{% endif %}
+ip prefix-list LOOPBACKS seq 10 permit {{ loopbacks }} ge 32
+{% if tenant %}
+ip prefix-list DEFAULT seq 10 permit 0.0.0.0/0
+ip prefix-list SUMMARY seq 10 permit {{ tenant.summary }}
+{% endif %}
+!
+route-map LOOPBACKS-ONLY permit 10
+ match ip address prefix-list LOOPBACKS
+exit
+!
+{% if tenant %}
+! From the ISP: only a default route. Everything else it might send is dropped.
+route-map FROM-ISP permit 10
+ match ip address prefix-list DEFAULT
+exit
+!
+! To the ISP: only the {{ tenant.name }} summary. No single servers, no other tenant.
+route-map TO-ISP permit 10
+ match ip address prefix-list SUMMARY
+exit
+!
+! Into the fabric: only the default route, so every {{ tenant.name }} leaf can reach the internet.
+route-map DEFAULT-ONLY permit 10
+ match ip address prefix-list DEFAULT
+exit
+!
+{% endif %}

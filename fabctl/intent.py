@@ -144,6 +144,9 @@ def check(intent):
     for t in isp["announce"]:
         if t not in tenants:
             err(f"isp.announce: tenant '{t}' does not exist")
+    online = [t for t, tenant in tenants.items() if tenant["internet"]]
+    if len(online) > 1:
+        err(f"tenants {' and '.join(online)} both have internet, but each border has one ISP link")
 
     if not re.fullmatch(r"([0-9a-f]{2}:){5}[0-9a-f]{2}", str(fabric["anycast_gateway_mac"])):
         err(f"anycast_gateway_mac {fabric['anycast_gateway_mac']} is not a MAC address")

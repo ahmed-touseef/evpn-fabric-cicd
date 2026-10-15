@@ -61,6 +61,30 @@ def leaves(intent):
         }
 
 
+def borders(intent):
+    """One entry per border. A border carries only the tenant with internet access:
+    its uplink to the ISP lives inside that tenant's VRF."""
+    online = [t for t, tenant in intent["tenants"].items() if tenant["internet"]]
+    tenant = None
+    if online:
+        t = online[0]
+        tenant = {"name": t, "l3vni": intent["tenants"][t]["l3vni"], "summary": intent["isp"]["announce"][t]}
+    for name, border in intent["borders"].items():
+        link = ipaddress.ip_network(intent["isp"]["links"][name])
+        yield name, {
+            "role": "border",
+            "name": name,
+            "asn": border["asn"],
+            "loopback": loopback(intent, border["id"]),
+            "loopbacks": intent["fabric"]["loopbacks"],
+            "bfd": intent["fabric"]["bfd"],
+            "rt": intent["fabric"]["route_target_asn"],
+            "ports": uplinks(intent),
+            "tenant": tenant,
+            "isp": {"port": "eth3", "address": f"{link[0]}/31", "peer": str(link[1]), "asn": intent["isp"]["asn"]},
+        }
+
+
 def devices(intent):
     """Everything the renderer has to produce, as {device name: facts}."""
-    return {**dict(spines(intent)), **dict(leaves(intent))}
+    return {**dict(spines(intent)), **dict(leaves(intent)), **dict(borders(intent))}
