@@ -71,10 +71,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install the tools
-        run: pip install -q pyyaml jinja2 pybatfish==2025.7.7.2423
+        run: pip install -q pyyaml jinja2 pytest pybatfish==2025.7.7.2423
 
       - name: Build the Batfish snapshot
         run: python3 -m fabctl snapshot
 
-      - name: Ask Batfish
-        run: python3 ci/batfish_explore.py
+      - name: Batfish proves the configs obey the intent
+        run: python3 -m pytest tests/batfish -v --tb=short -p no:cacheprovider
