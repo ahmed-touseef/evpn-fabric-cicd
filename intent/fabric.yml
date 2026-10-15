@@ -41,6 +41,7 @@ hosts:
   nfs1: {leaf: leaf2, port: eth4, vlan: 20, address: 10.20.20.11}
   nfs2: {leaf: leaf4, port: eth3, vlan: 20, address: 10.20.20.12}
   bkp1: {leaf: leaf4, port: eth4, vlan: 21, address: 10.20.21.11}
+  web3: {leaf: leaf3, port: eth4, vlan: 10, address: 10.10.10.13}
 
 # The upstream provider: a router container playing the ISP.
 # 64496 and 198.51.100.0/24 are reserved for examples, so they never clash with real networks.
