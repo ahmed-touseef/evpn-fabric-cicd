@@ -51,3 +51,30 @@ jobs:
 
       - name: Shell scripts are clean
         run: shellcheck -s sh rendered/*/interfaces.sh && shellcheck lab/deploy.sh && echo "all scripts clean"
+
+  batfish:
+    name: Batfish
+    needs: intent                 # only analyse configs that already passed the first job
+    runs-on: ubuntu-24.04
+    services:
+      batfish:                    # Batfish runs next to the job, reachable on localhost:9996
+        image: batfish/allinone:2025.07.07.2423
+        ports:
+          - 9996:9996
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v5
+
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the tools
+        run: pip install -q pyyaml jinja2 pybatfish==2025.7.7.2423
+
+      - name: Build the Batfish snapshot
+        run: python3 -m fabctl snapshot
+
+      - name: Ask Batfish
+        run: python3 ci/batfish_explore.py
