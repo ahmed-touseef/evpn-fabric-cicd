@@ -24,12 +24,6 @@ interface {{ port.name }}
 exit
 !
 {% endfor %}
-{% if tenant %}
-interface {{ isp.port }}
- description to isp
-exit
-!
-{% endif %}
 bfd
  profile FABRIC
   transmit-interval {{ bfd.interval_ms }}
