@@ -99,6 +99,10 @@ topology:
       image: fabric-host:1
       binds:
         - bkp1/interfaces.sh:/etc/fabric/interfaces.sh:ro
+    web3:
+      image: fabric-host:1
+      binds:
+        - web3/interfaces.sh:/etc/fabric/interfaces.sh:ro
 
   links:
     - endpoints: ["spine1:eth11", "leaf1:eth1"]
@@ -121,3 +125,4 @@ topology:
     - endpoints: ["leaf2:eth4", "nfs1:eth1"]
     - endpoints: ["leaf4:eth3", "nfs2:eth1"]
     - endpoints: ["leaf4:eth4", "bkp1:eth1"]
+    - endpoints: ["leaf3:eth4", "web3:eth1"]
