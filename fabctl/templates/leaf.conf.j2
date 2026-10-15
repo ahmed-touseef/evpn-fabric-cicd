@@ -1,0 +1,84 @@
+! {{ name }}: leaf. Generated from intent/fabric.yml by fabctl render; do not edit by hand.
+frr version 10.2.1
+frr defaults datacenter
+hostname {{ name }}
+log syslog informational
+service integrated-vtysh-config
+!
+{% for t in tenants %}
+vrf {{ t.name }}
+ vni {{ t.l3vni }}
+exit-vrf
+!
+{% endfor %}
+interface lo
+ ip address {{ loopback }}/32
+exit
+!
+{% for port in ports %}
+interface {{ port.name }}
+ description to {{ port.peer }}
+exit
+!
+{% endfor %}
+bfd
+ profile FABRIC
+  transmit-interval {{ bfd.interval_ms }}
+  receive-interval {{ bfd.interval_ms }}
+  detect-multiplier {{ bfd.multiplier }}
+ exit
+exit
+!
+router bgp {{ asn }}
+ bgp router-id {{ loopback }}
+ bgp bestpath as-path multipath-relax
+ neighbor FABRIC peer-group
+ neighbor FABRIC remote-as external
+ neighbor FABRIC bfd profile FABRIC
+{% for port in ports %}
+ neighbor {{ port.name }} interface peer-group FABRIC
+{% endfor %}
+ !
+ address-family ipv4 unicast
+  network {{ loopback }}/32
+  neighbor FABRIC route-map LOOPBACKS-ONLY in
+  neighbor FABRIC route-map LOOPBACKS-ONLY out
+ exit-address-family
+ !
+ address-family l2vpn evpn
+  neighbor FABRIC activate
+  advertise-all-vni
+{% for t in tenants %}
+{% for vlan in t.vlans %}
+  vni {{ vlan.vni }}
+   route-target import {{ rt }}:{{ vlan.vni }}
+   route-target export {{ rt }}:{{ vlan.vni }}
+  exit-vni
+{% endfor %}
+{% endfor %}
+ exit-address-family
+exit
+!
+{% for t in tenants %}
+router bgp {{ asn }} vrf {{ t.name }}
+ bgp router-id {{ loopback }}
+ bgp bestpath as-path multipath-relax
+ !
+ address-family ipv4 unicast
+  redistribute connected
+ exit-address-family
+ !
+ address-family l2vpn evpn
+  advertise ipv4 unicast
+  route-target import {{ rt }}:{{ t.l3vni }}
+  route-target export {{ rt }}:{{ t.l3vni }}
+ exit-address-family
+exit
+!
+{% endfor %}
+ip prefix-list LOOPBACKS seq 10 permit {{ loopbacks }} ge 32
+!
+route-map LOOPBACKS-ONLY permit 10
+ match ip address prefix-list LOOPBACKS
+exit
+!

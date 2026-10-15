@@ -25,6 +25,39 @@ def spines(intent):
         }
 
 
+def uplinks(intent):
+    """Leaf and border port eth<N> goes to the spine with id N."""
+    return [{"name": f"eth{spine['id']}", "peer": name}
+            for name, spine in sorted(intent["spines"]["devices"].items(), key=lambda kv: kv[1]["id"])]
+
+
+def leaves(intent):
+    """One entry per leaf, with only the VLANs and tenants its servers actually need."""
+    vlan_tenant = {vid: t for t, tenant in intent["tenants"].items() for vid in tenant["vlans"]}
+    rt = intent["fabric"]["route_target_asn"]
+    for name, leaf in intent["leaves"].items():
+        servers = {h: host for h, host in intent["hosts"].items() if host["leaf"] == name}
+        tenants = {}
+        for vid in sorted({host["vlan"] for host in servers.values()}):
+            t = vlan_tenant[vid]
+            vlan = intent["tenants"][t]["vlans"][vid]
+            subnet = ipaddress.ip_network(vlan["subnet"])
+            tenants.setdefault(t, {"name": t, "l3vni": intent["tenants"][t]["l3vni"], "vlans": []})
+            tenants[t]["vlans"].append({"id": vid, "name": vlan["name"], "vni": vlan["vni"],
+                                        "gateway": f"{subnet[1]}/{subnet.prefixlen}"})
+        yield name, {
+            "role": "leaf",
+            "name": name,
+            "asn": leaf["asn"],
+            "loopback": loopback(intent, leaf["id"]),
+            "loopbacks": intent["fabric"]["loopbacks"],
+            "bfd": intent["fabric"]["bfd"],
+            "rt": rt,
+            "ports": uplinks(intent),
+            "tenants": [tenants[t] for t in sorted(tenants)],
+        }
+
+
 def devices(intent):
     """Everything the renderer has to produce, as {device name: facts}."""
-    return dict(spines(intent))
+    return {**dict(spines(intent)), **dict(leaves(intent))}
