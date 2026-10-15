@@ -1,0 +1,53 @@
+# The pipeline: GitHub runs this on every pull request and on every change to main.
+# A red step blocks the merge; nothing reaches the network until every step is green.
+name: pipeline
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  intent:
+    name: Intent and configs
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v5
+
+      - name: Install the tools
+        run: sudo apt-get update -q && sudo apt-get install -y -q python3-yaml python3-jinja2 shellcheck
+
+      - name: The intent has no mistakes
+        run: python3 -m fabctl check
+
+      - name: The committed configs match the intent
+        run: |
+          python3 -m fabctl render > /dev/null
+          if [ -n "$(git status --porcelain -- rendered/)" ]; then
+            git status --short -- rendered/
+            echo "::error::rendered/ does not match intent/fabric.yml. Run: python3 -m fabctl render, then commit rendered/"
+            exit 1
+          fi
+          echo "rendered/ is exactly what the intent produces"
+
+      - name: FRR accepts every config
+        run: |
+          docker pull -q quay.io/frrouting/frr:10.2.1 > /dev/null
+          failed=0
+          for f in rendered/*/frr.conf; do
+            if out=$(docker run --rm -v "$PWD/$f:/tmp/c.conf:ro" -v /dev/null:/etc/frr/vtysh.conf:ro \
+                     quay.io/frrouting/frr:10.2.1 vtysh -C -f /tmp/c.conf 2>&1); then
+              echo "accepted  $f"
+            else
+              echo "::error file=$f::FRR rejects this config: $out"
+              failed=1
+            fi
+          done
+          exit $failed
+
+      - name: Shell scripts are clean
+        run: shellcheck -s sh rendered/*/interfaces.sh && shellcheck lab/deploy.sh && echo "all scripts clean"
