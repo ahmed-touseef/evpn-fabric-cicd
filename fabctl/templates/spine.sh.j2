@@ -1,0 +1,12 @@
+#!/bin/sh
+# {{ name }}: Linux side of a spine. Generated from intent/fabric.yml by fabctl render.
+# A spine only routes, so it needs no VLANs or tunnels: just forwarding and IPv6 switched on.
+set -e
+
+# Forward packets, and enable IPv6: BGP unnumbered talks over IPv6 link local addresses.
+sysctl -qw net.ipv4.ip_forward=1 net.ipv6.conf.all.forwarding=1
+sysctl -qw net.ipv6.conf.all.disable_ipv6=0 net.ipv6.conf.default.disable_ipv6=0
+{% for port in ports %}
+sysctl -qw net.ipv6.conf.{{ port.name }}.disable_ipv6=0
+ip link set {{ port.name }} up
+{% endfor %}

@@ -55,6 +55,9 @@ def leaves(intent):
             "rt": rt,
             "ports": uplinks(intent),
             "tenants": [tenants[t] for t in sorted(tenants)],
+            "anycast_mac": intent["fabric"]["anycast_gateway_mac"],
+            "servers": [{"name": h, "port": host["port"], "vlan": host["vlan"]}
+                        for h, host in sorted(servers.items(), key=lambda kv: int(kv[1]["port"][3:]))],
         }
 
 
