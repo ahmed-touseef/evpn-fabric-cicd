@@ -1,2 +1,4 @@
 # Python's compiled cache, recreated on every run
 __pycache__/
+# containerlab's working folder, created next to the topology file
+rendered/clab-*/

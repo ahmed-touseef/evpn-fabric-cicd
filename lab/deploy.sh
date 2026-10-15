@@ -14,8 +14,8 @@ sudo containerlab deploy -t rendered/topology.clab.yml --reconfigure >/dev/null
 echo "  $(sudo docker ps -q --filter "label=containerlab=$LAB" | wc -l) containers running"
 
 echo "== 3. Linux side of every device (VRFs, VLANs, VXLAN tunnels, addresses) =="
-for dir in rendered/*/; do
-  node=$(basename "$dir")
+for script in rendered/*/interfaces.sh; do     # containerlab's own rendered/clab-*/ folder has none
+  node=$(basename "$(dirname "$script")")
   sudo docker exec "clab-$LAB-$node" sh /etc/fabric/interfaces.sh
   echo "  $node"
 done
