@@ -66,7 +66,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -78,3 +78,47 @@ jobs:
 
       - name: Batfish proves the configs obey the intent
         run: python3 -m pytest tests/batfish -v --tb=short -p no:cacheprovider
+
+  live:
+    name: Live lab
+    needs: batfish                # only boot configs that Batfish has already proven
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v5
+
+      - name: Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install the tools
+        run: |
+          pip install -q pyyaml jinja2 pytest
+          curl -sSfL -o /tmp/containerlab.deb \
+            https://github.com/srl-labs/containerlab/releases/download/v0.79.0/containerlab_0.79.0_linux_amd64.deb
+          sudo dpkg -i /tmp/containerlab.deb > /dev/null
+          containerlab version
+
+      - name: Kernel features the fabric needs
+        run: |
+          # VRFs and VXLAN tunnels live in the Linux kernel. Cloud kernels keep some of them
+          # in a separate package, so install it only if they are missing.
+          if ! sudo modprobe -a vrf vxlan 2>/dev/null; then
+            echo "not in the base kernel package: installing the extra kernel modules"
+            sudo apt-get update -q > /dev/null
+            sudo apt-get install -y -q "linux-modules-extra-$(uname -r)" > /dev/null
+            sudo modprobe -a vrf vxlan
+          fi
+          echo "kernel $(uname -r): vrf and vxlan loaded"
+
+      - name: Boot the fabric
+        run: ./lab/deploy.sh
+
+      - name: The running fabric obeys the intent
+        run: python3 -m pytest tests/live -v --tb=short -p no:cacheprovider
+
+      - name: What the fabric looked like, to debug the failure
+        if: failure()
+        run: python3 ci/live_explore.py

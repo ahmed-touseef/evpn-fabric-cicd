@@ -28,6 +28,12 @@ ip link set vx{{ t.l3vni }} master br{{ t.l3vni }} up
 exists br{{ vlan.id }} || ip link add br{{ vlan.id }} type bridge
 ip link set br{{ vlan.id }} master {{ t.name }} address {{ anycast_mac }} up
 ip addr replace {{ vlan.gateway }} dev br{{ vlan.id }}
+{# The gateway's address and MAC are the same on every leaf. So when another leaf that also
+   carries this VLAN ARPs for a server behind this leaf, the server's reply lands here, and
+   Linux drops replies it never asked for. arp_accept keeps it: this leaf learns the server
+   and announces it to the fabric, and the other leaf routes to it through the tunnel.
+   Without it, a quiet server stays unreachable from the other subnets of its tenant. #}
+sysctl -qw net.ipv4.conf.br{{ vlan.id }}.arp_accept=1   # learn servers from replies meant for another leaf
 exists vx{{ vlan.vni }} || ip link add vx{{ vlan.vni }} mtu 1500 type vxlan id {{ vlan.vni }} local {{ loopback }} dstport 4789 nolearning
 ip link set vx{{ vlan.vni }} master br{{ vlan.id }} up
 ip link set vx{{ vlan.vni }} type bridge_slave neigh_suppress on learning off
