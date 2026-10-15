@@ -1,8 +1,9 @@
 """Looks at the fabric booted on this machine and prints what it sees.
 
-Exploration only: it never fails the pipeline. Once we know how the fabric behaves on
-GitHub's machine (how long it takes to come up, what each table holds), the answers
-become strict tests. Every name and address comes from intent/fabric.yml.
+The strict checks live in tests/live. The pipeline runs this script only when one of them
+fails, so the log also shows the state behind the failure: timings, the full ping matrix
+and the routing tables. It never fails anything itself, and works by hand on the lab too.
+Every name and address comes from intent/fabric.yml.
 """
 import json
 import subprocess

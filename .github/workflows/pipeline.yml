@@ -83,7 +83,7 @@ jobs:
     name: Live lab
     needs: batfish                # only boot configs that Batfish has already proven
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Get the code
         uses: actions/checkout@v5
@@ -95,7 +95,7 @@ jobs:
 
       - name: Install the tools
         run: |
-          pip install -q pyyaml jinja2
+          pip install -q pyyaml jinja2 pytest
           curl -sSfL -o /tmp/containerlab.deb \
             https://github.com/srl-labs/containerlab/releases/download/v0.79.0/containerlab_0.79.0_linux_amd64.deb
           sudo dpkg -i /tmp/containerlab.deb > /dev/null
@@ -116,5 +116,9 @@ jobs:
       - name: Boot the fabric
         run: ./lab/deploy.sh
 
-      - name: Look at the running fabric
+      - name: The running fabric obeys the intent
+        run: python3 -m pytest tests/live -v --tb=short -p no:cacheprovider
+
+      - name: What the fabric looked like, to debug the failure
+        if: failure()
         run: python3 ci/live_explore.py
