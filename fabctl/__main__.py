@@ -1,4 +1,7 @@
-"""Command line: python3 -m fabctl check"""
+"""Command line:
+    python3 -m fabctl check     look for mistakes in intent/fabric.yml
+    python3 -m fabctl render    check, then write the configs into rendered/
+"""
 import sys
 
 import yaml
@@ -7,29 +10,42 @@ from . import intent
 
 
 def check():
+    """Returns the intent if it is consistent, None after printing the problems."""
     try:
         data = intent.load()
         errors = intent.check(data)
     except (OSError, yaml.YAMLError) as e:
         print(f"Cannot read the intent: {e}")
-        return 1
+        return None
     except KeyError as e:
         print(f"Missing field in the intent: {e}")
-        return 1
+        return None
     if errors:
         print(f"{len(errors)} problem(s) in intent/fabric.yml:")
         for e in errors:
             print(f"  - {e}")
-        return 1
+        return None
     vlans = sum(len(t["vlans"]) for t in data["tenants"].values())
     print(f"intent/fabric.yml is consistent: {len(data['spines']['devices'])} spines, "
           f"{len(data['leaves'])} leaves, {len(data['borders'])} borders, "
           f"{len(data['tenants'])} tenants, {vlans} VLANs, {len(data['hosts'])} servers")
+    return data
+
+
+def render():
+    data = check()
+    if data is None:
+        return 1
+    from .render import render as write_configs      # only needs jinja2 when rendering
+    for path in write_configs(data):
+        print(f"  wrote {path}")
     return 0
 
 
+COMMANDS = {"check": lambda: 0 if check() else 1, "render": render}
+
 if __name__ == "__main__":
-    if sys.argv[1:] != ["check"]:
-        print("Use: python3 -m fabctl check")
+    if len(sys.argv) != 2 or sys.argv[1] not in COMMANDS:
+        print(__doc__.strip())
         sys.exit(2)
-    sys.exit(check())
+    sys.exit(COMMANDS[sys.argv[1]]())
