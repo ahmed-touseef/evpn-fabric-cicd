@@ -85,6 +85,30 @@ def borders(intent):
         }
 
 
+def isp(intent):
+    """The provider's router. ISP port eth<N> goes to the border with id N; on each /31
+    the border takes the first address and the ISP the second."""
+    ports = []
+    for border, link in intent["isp"]["links"].items():
+        net = ipaddress.ip_network(link)
+        ports.append({"name": f"eth{intent['borders'][border]['id']}", "peer": border,
+                      "address": f"{net[1]}/31", "peer_address": str(net[0]),
+                      "peer_asn": intent["borders"][border]["asn"]})
+    yield "isp", {"role": "isp", "name": "isp", "asn": intent["isp"]["asn"],
+                  "internet_host": intent["isp"]["internet_host"], "ports": ports}
+
+
+def hosts(intent):
+    """One entry per server: its address, and the anycast gateway of its VLAN (always the .1)."""
+    vlans = {vid: (t, vlan) for t, tenant in intent["tenants"].items() for vid, vlan in tenant["vlans"].items()}
+    for name, host in intent["hosts"].items():
+        tenant, vlan = vlans[host["vlan"]]
+        subnet = ipaddress.ip_network(vlan["subnet"])
+        yield name, {"role": "host", "name": name, "tenant": tenant, "vlan": host["vlan"], "leaf": host["leaf"],
+                     "address": f"{host['address']}/{subnet.prefixlen}", "gateway": str(subnet[1])}
+
+
 def devices(intent):
     """Everything the renderer has to produce, as {device name: facts}."""
-    return {**dict(spines(intent)), **dict(leaves(intent)), **dict(borders(intent))}
+    return {**dict(spines(intent)), **dict(leaves(intent)), **dict(borders(intent)),
+            **dict(isp(intent)), **dict(hosts(intent))}

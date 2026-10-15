@@ -1,0 +1,38 @@
+! {{ name }}: the upstream provider, simulated. Generated from intent/fabric.yml by fabctl render.
+! A real ISP is not ours to configure. This one deliberately accepts whatever the borders
+! send, so any leak from our side shows up in its routing table, where the tests look for it.
+frr version 10.2.1
+frr defaults traditional
+hostname {{ name }}
+log syslog informational
+service integrated-vtysh-config
+!
+interface lo
+ description the internet, as far as the fabric can tell
+ ip address {{ internet_host }}/32
+exit
+!
+{% for port in ports %}
+interface {{ port.name }}
+ description to {{ port.peer }}
+ ip address {{ port.address }}
+exit
+!
+{% endfor %}
+router bgp {{ asn }}
+ bgp router-id {{ internet_host }}
+ no bgp ebgp-requires-policy
+ bgp bestpath as-path multipath-relax
+{% for port in ports %}
+ neighbor {{ port.peer_address }} remote-as {{ port.peer_asn }}
+ neighbor {{ port.peer_address }} description {{ port.peer }}
+{% endfor %}
+ !
+ address-family ipv4 unicast
+  network {{ internet_host }}/32
+{% for port in ports %}
+  neighbor {{ port.peer_address }} default-originate
+{% endfor %}
+ exit-address-family
+exit
+!
