@@ -108,6 +108,18 @@ def hosts(intent):
                      "address": f"{host['address']}/{subnet.prefixlen}", "gateway": str(subnet[1])}
 
 
+def cables(intent):
+    """Every cable in the fabric, following the same id rules as the ports above."""
+    spines, below = intent["spines"]["devices"], {**intent["leaves"], **intent["borders"]}
+    for s, spine in sorted(spines.items(), key=lambda kv: kv[1]["id"]):
+        for name, sw in sorted(below.items(), key=lambda kv: kv[1]["id"]):
+            yield {"a": s, "a_port": f"eth{sw['id']}", "b": name, "b_port": f"eth{spine['id']}"}
+    for name, border in intent["borders"].items():
+        yield {"a": name, "a_port": "eth3", "b": "isp", "b_port": f"eth{border['id']}"}
+    for name, host in intent["hosts"].items():
+        yield {"a": host["leaf"], "a_port": host["port"], "b": name, "b_port": "eth1"}
+
+
 def devices(intent):
     """Everything the renderer has to produce, as {device name: facts}."""
     return {**dict(spines(intent)), **dict(leaves(intent)), **dict(borders(intent)),

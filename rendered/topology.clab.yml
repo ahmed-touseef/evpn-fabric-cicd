@@ -1,0 +1,123 @@
+# Containerlab topology: which containers exist and how they are cabled.
+# Generated from intent/fabric.yml by fabctl render; do not edit by hand.
+# Configs are mounted read only: nobody can "write memory" on a switch.
+# The only way to change the running network is a change in Git.
+name: fabric
+
+mgmt:
+  network: fabric-mgmt
+  ipv4-subnet: 172.30.50.0/24       # the other labs on this server use 172.30.30 and 172.30.40
+
+topology:
+  defaults:
+    kind: linux
+  nodes:
+    spine1:
+      image: quay.io/frrouting/frr:10.2.1
+      binds:
+        - spine1/frr.conf:/etc/frr/frr.conf:ro
+        - spine1/interfaces.sh:/etc/fabric/interfaces.sh:ro
+        - ../lab/daemons:/etc/frr/daemons:ro
+        - ../lab/vtysh.conf:/etc/frr/vtysh.conf:ro
+    spine2:
+      image: quay.io/frrouting/frr:10.2.1
+      binds:
+        - spine2/frr.conf:/etc/frr/frr.conf:ro
+        - spine2/interfaces.sh:/etc/fabric/interfaces.sh:ro
+        - ../lab/daemons:/etc/frr/daemons:ro
+        - ../lab/vtysh.conf:/etc/frr/vtysh.conf:ro
+    leaf1:
+      image: quay.io/frrouting/frr:10.2.1
+      binds:
+        - leaf1/frr.conf:/etc/frr/frr.conf:ro
+        - leaf1/interfaces.sh:/etc/fabric/interfaces.sh:ro
+        - ../lab/daemons:/etc/frr/daemons:ro
+        - ../lab/vtysh.conf:/etc/frr/vtysh.conf:ro
+    leaf2:
+      image: quay.io/frrouting/frr:10.2.1
+      binds:
+        - leaf2/frr.conf:/etc/frr/frr.conf:ro
+        - leaf2/interfaces.sh:/etc/fabric/interfaces.sh:ro
+        - ../lab/daemons:/etc/frr/daemons:ro
+        - ../lab/vtysh.conf:/etc/frr/vtysh.conf:ro
+    leaf3:
+      image: quay.io/frrouting/frr:10.2.1
+      binds:
+        - leaf3/frr.conf:/etc/frr/frr.conf:ro
+        - leaf3/interfaces.sh:/etc/fabric/interfaces.sh:ro
+        - ../lab/daemons:/etc/frr/daemons:ro
+        - ../lab/vtysh.conf:/etc/frr/vtysh.conf:ro
+    leaf4:
+      image: quay.io/frrouting/frr:10.2.1
+      binds:
+        - leaf4/frr.conf:/etc/frr/frr.conf:ro
+        - leaf4/interfaces.sh:/etc/fabric/interfaces.sh:ro
+        - ../lab/daemons:/etc/frr/daemons:ro
+        - ../lab/vtysh.conf:/etc/frr/vtysh.conf:ro
+    border1:
+      image: quay.io/frrouting/frr:10.2.1
+      binds:
+        - border1/frr.conf:/etc/frr/frr.conf:ro
+        - border1/interfaces.sh:/etc/fabric/interfaces.sh:ro
+        - ../lab/daemons:/etc/frr/daemons:ro
+        - ../lab/vtysh.conf:/etc/frr/vtysh.conf:ro
+    border2:
+      image: quay.io/frrouting/frr:10.2.1
+      binds:
+        - border2/frr.conf:/etc/frr/frr.conf:ro
+        - border2/interfaces.sh:/etc/fabric/interfaces.sh:ro
+        - ../lab/daemons:/etc/frr/daemons:ro
+        - ../lab/vtysh.conf:/etc/frr/vtysh.conf:ro
+    isp:
+      image: quay.io/frrouting/frr:10.2.1
+      binds:
+        - isp/frr.conf:/etc/frr/frr.conf:ro
+        - isp/interfaces.sh:/etc/fabric/interfaces.sh:ro
+        - ../lab/daemons:/etc/frr/daemons:ro
+        - ../lab/vtysh.conf:/etc/frr/vtysh.conf:ro
+    web1:
+      image: fabric-host:1
+      binds:
+        - web1/interfaces.sh:/etc/fabric/interfaces.sh:ro
+    web2:
+      image: fabric-host:1
+      binds:
+        - web2/interfaces.sh:/etc/fabric/interfaces.sh:ro
+    app1:
+      image: fabric-host:1
+      binds:
+        - app1/interfaces.sh:/etc/fabric/interfaces.sh:ro
+    nfs1:
+      image: fabric-host:1
+      binds:
+        - nfs1/interfaces.sh:/etc/fabric/interfaces.sh:ro
+    nfs2:
+      image: fabric-host:1
+      binds:
+        - nfs2/interfaces.sh:/etc/fabric/interfaces.sh:ro
+    bkp1:
+      image: fabric-host:1
+      binds:
+        - bkp1/interfaces.sh:/etc/fabric/interfaces.sh:ro
+
+  links:
+    - endpoints: ["spine1:eth11", "leaf1:eth1"]
+    - endpoints: ["spine1:eth12", "leaf2:eth1"]
+    - endpoints: ["spine1:eth13", "leaf3:eth1"]
+    - endpoints: ["spine1:eth14", "leaf4:eth1"]
+    - endpoints: ["spine1:eth21", "border1:eth1"]
+    - endpoints: ["spine1:eth22", "border2:eth1"]
+    - endpoints: ["spine2:eth11", "leaf1:eth2"]
+    - endpoints: ["spine2:eth12", "leaf2:eth2"]
+    - endpoints: ["spine2:eth13", "leaf3:eth2"]
+    - endpoints: ["spine2:eth14", "leaf4:eth2"]
+    - endpoints: ["spine2:eth21", "border1:eth2"]
+    - endpoints: ["spine2:eth22", "border2:eth2"]
+    - endpoints: ["border1:eth3", "isp:eth21"]
+    - endpoints: ["border2:eth3", "isp:eth22"]
+    - endpoints: ["leaf1:eth3", "web1:eth1"]
+    - endpoints: ["leaf2:eth3", "web2:eth1"]
+    - endpoints: ["leaf3:eth3", "app1:eth1"]
+    - endpoints: ["leaf2:eth4", "nfs1:eth1"]
+    - endpoints: ["leaf4:eth3", "nfs2:eth1"]
+    - endpoints: ["leaf4:eth4", "bkp1:eth1"]

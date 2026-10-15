@@ -30,4 +30,13 @@ def render(intent, out="rendered"):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text)
             written.append(path)
+    devices = model.devices(intent)
+    topology = ENV.get_template("topology.clab.yml.j2").render(
+        name=intent["fabric"]["name"],
+        routers=[n for n, d in devices.items() if d["role"] != "host"],
+        hosts=[n for n, d in devices.items() if d["role"] == "host"],
+        cables=list(model.cables(intent)))
+    path = Path(out) / "topology.clab.yml"
+    path.write_text(topology)
+    written.append(path)
     return written

@@ -1,0 +1,34 @@
+# Containerlab topology: which containers exist and how they are cabled.
+# Generated from intent/fabric.yml by fabctl render; do not edit by hand.
+# Configs are mounted read only: nobody can "write memory" on a switch.
+# The only way to change the running network is a change in Git.
+name: {{ name }}
+
+mgmt:
+  network: {{ name }}-mgmt
+  ipv4-subnet: 172.30.50.0/24       # the other labs on this server use 172.30.30 and 172.30.40
+
+topology:
+  defaults:
+    kind: linux
+  nodes:
+{% for n in routers %}
+    {{ n }}:
+      image: quay.io/frrouting/frr:10.2.1
+      binds:
+        - {{ n }}/frr.conf:/etc/frr/frr.conf:ro
+        - {{ n }}/interfaces.sh:/etc/fabric/interfaces.sh:ro
+        - ../lab/daemons:/etc/frr/daemons:ro
+        - ../lab/vtysh.conf:/etc/frr/vtysh.conf:ro
+{% endfor %}
+{% for n in hosts %}
+    {{ n }}:
+      image: fabric-host:1
+      binds:
+        - {{ n }}/interfaces.sh:/etc/fabric/interfaces.sh:ro
+{% endfor %}
+
+  links:
+{% for c in cables %}
+    - endpoints: ["{{ c.a }}:{{ c.a_port }}", "{{ c.b }}:{{ c.b_port }}"]
+{% endfor %}
