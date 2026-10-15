@@ -26,6 +26,7 @@ ip link set vx50002 master br50002 up
 exists br20 || ip link add br20 type bridge
 ip link set br20 master storage address 00:00:5e:00:01:01 up
 ip addr replace 10.20.20.1/24 dev br20
+sysctl -qw net.ipv4.conf.br20.arp_accept=1   # learn servers from replies meant for another leaf
 exists vx10020 || ip link add vx10020 mtu 1500 type vxlan id 10020 local 10.255.0.14 dstport 4789 nolearning
 ip link set vx10020 master br20 up
 ip link set vx10020 type bridge_slave neigh_suppress on learning off
@@ -34,6 +35,7 @@ ip link set vx10020 type bridge_slave neigh_suppress on learning off
 exists br21 || ip link add br21 type bridge
 ip link set br21 master storage address 00:00:5e:00:01:01 up
 ip addr replace 10.20.21.1/24 dev br21
+sysctl -qw net.ipv4.conf.br21.arp_accept=1   # learn servers from replies meant for another leaf
 exists vx10021 || ip link add vx10021 mtu 1500 type vxlan id 10021 local 10.255.0.14 dstport 4789 nolearning
 ip link set vx10021 master br21 up
 ip link set vx10021 type bridge_slave neigh_suppress on learning off
