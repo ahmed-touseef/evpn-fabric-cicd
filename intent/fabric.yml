@@ -1,0 +1,65 @@
+# The data center switches and their BGP numbers (ASN).
+
+spines:
+  asn: 65100
+  devices:
+    spine1: {id: 1}
+    spine2: {id: 2}
+
+leaves:
+  leaf1: {id: 11, asn: 65101}
+  leaf2: {id: 12, asn: 65102}
+  leaf3: {id: 13, asn: 65103}
+  leaf4: {id: 14, asn: 65104}
+
+borders:
+  border1: {id: 21, asn: 65201}
+  border2: {id: 22, asn: 65202}
+
+# The two customers (tenants). Each one is a VRF: its own routing table on every switch.
+# Gateways are not written here: always the .1 of each subnet, worked out by the script.
+tenants:
+  prod:
+    l3vni: 50001
+    internet: true
+    vlans:
+      10: {name: web, subnet: 10.10.10.0/24, vni: 10010}
+      11: {name: app, subnet: 10.10.11.0/24, vni: 10011}
+  storage:
+    l3vni: 50002
+    internet: false
+    vlans:
+      20: {name: nfs, subnet: 10.20.20.0/24, vni: 10020}
+      21: {name: backup, subnet: 10.20.21.0/24, vni: 10021}
+
+# The servers. Ports are physical facts, so they are written, never calculated.
+# A VLAN exists on a leaf only where a server is cabled into it.
+hosts:
+  web1: {leaf: leaf1, port: eth3, vlan: 10, address: 10.10.10.11}
+  web2: {leaf: leaf2, port: eth3, vlan: 10, address: 10.10.10.12}
+  app1: {leaf: leaf3, port: eth3, vlan: 11, address: 10.10.11.11}
+  nfs1: {leaf: leaf2, port: eth4, vlan: 20, address: 10.20.20.11}
+  nfs2: {leaf: leaf4, port: eth3, vlan: 20, address: 10.20.20.12}
+  bkp1: {leaf: leaf4, port: eth4, vlan: 21, address: 10.20.21.11}
+
+# The upstream provider: a router container playing the ISP.
+# 64496 and 198.51.100.0/24 are reserved for examples, so they never clash with real networks.
+# Policy at the border: we announce only the summaries below, and accept only a default route.
+isp:
+  asn: 64496
+  internet_host: 198.51.100.1
+  links:
+    border1: 172.16.255.0/31
+    border2: 172.16.255.2/31
+  announce:
+    prod: 10.10.0.0/16
+
+# Settings for the whole network.
+# Route targets are set by hand: automatic ones contain each leaf's own ASN,
+# and with a different ASN on every leaf they would never match.
+fabric:
+  name: fabric
+  loopbacks: 10.255.0.0/24
+  anycast_gateway_mac: 00:00:5e:00:01:01
+  route_target_asn: 65000
+  bfd: {interval_ms: 100, multiplier: 3}
