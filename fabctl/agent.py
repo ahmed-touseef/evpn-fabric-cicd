@@ -14,7 +14,8 @@ Pull, never push: GitHub holds no key to this server. A systemd timer runs one c
      file that the status page reads.
 
 A lab found missing or incomplete, after a reboot for example, is rebuilt from the running commit,
-and a file of this checkout edited by hand is restored from Git.
+and a file of this checkout edited by hand is restored from Git. A commit that changes the agent
+itself is deployed by its own new code, so a fix to the deploy path can always deploy itself.
 """
 import fcntl
 import importlib
@@ -136,7 +137,8 @@ def live_tests():
 
 
 def reload(lab, node):
-    """Sends one router the commands that make it run rendered/<node>/frr.conf of the checked out commit."""
+    """Sends one router the commands that make it run rendered/<node>/frr.conf of the checked out
+    commit: (True, []) or (False, frr-reload's own lines saying why not)."""
     config = (Path("rendered") / node / "frr.conf").read_text()
     return frr.reload(lambda *command, stdin=None: lab.run(node, *command, stdin=stdin), config)
 
@@ -150,10 +152,14 @@ def settled(lab, nodes):
 
 # ---- Deploying ----------------------------------------------------------------------------------
 
-def deploy(old, new):
+def deploy(old, new, hand_over=True):
     """Moves the lab from commit old to commit new. Returns True if new now runs, checked."""
     changed = git("diff", "--name-only", old, new).splitlines()
     git("checkout", "-q", "--detach", new)
+    if hand_over and any(path.startswith("fabctl/") for path in changed):
+        # The running agent may be the very code this commit fixes: let the new code finish the job.
+        print(f"{new[:7]} changes the agent itself: its own code carries out the deploy", flush=True)
+        os.execv(sys.executable, [sys.executable, "-m", "fabctl", "agent", "--deploy", old, new])
     lab = probes()
     kind, routers = plan(changed, {name: facts["role"] for name, facts in lab.DEVICES.items()})
     started, base = time.time(), {"commit": new[:7], "previous": old[:7], "plan": kind}
@@ -166,7 +172,8 @@ def deploy(old, new):
         done = []
         for node in routers:
             done.append(node)
-            problems = settled(lab, [node]) if reload(lab, node) else [f"{node}: frr-reload failed"]
+            applied, why = reload(lab, node)
+            problems = settled(lab, [node]) if applied else [f"{node}: frr-reload failed"] + why
             if not problems and node == routers[0] and len(routers) > 1:
                 time.sleep(BAKE_S)                       # the canary must stay healthy, not just get there
                 problems = settled(lab, [node])
@@ -256,7 +263,13 @@ def cycle():
     heal_drift(lab, old)
 
 
-def main():
+def main(args=()):
+    """One cycle. With --deploy OLD NEW: the second half of a hand over, run by the new code."""
+    if subprocess.run(["git", "symbolic-ref", "-q", "HEAD"], capture_output=True).returncode == 0:
+        # A checkout on a branch is somebody's working copy: a cycle would restore its edited files
+        # from Git and wipe their work. Production is always a detached commit (see deploy/fabric-agent.service).
+        print("not running: this checkout is on a branch, so it is a working copy, not production", flush=True)
+        return 2
     STATE.mkdir(parents=True, exist_ok=True)
     with open(STATE / "lock", "w") as lock:
         try:
@@ -265,7 +278,11 @@ def main():
             print("another cycle is still running", flush=True)
             return 0
         try:
-            cycle()
+            if len(args) == 3 and args[0] == "--deploy":
+                if not deploy(args[1], args[2], hand_over=False):
+                    remember(refused=args[2])
+            else:
+                cycle()
         except subprocess.CalledProcessError as error:
             print(f"{' '.join(error.cmd)} failed, trying again next minute: {error.stderr.strip()}", flush=True)
             return 1

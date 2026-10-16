@@ -3,12 +3,15 @@
 Every expectation comes from intent/fabric.yml (see fabctl/lab.py): the running network is what is
 being checked, the intent is what it must obey.
 """
+from pathlib import Path
+
 import pytest
 
+from fabctl import frr
 from fabctl.lab import (ALLOWED, BORDERS, DEVICES, FORBIDDEN, LEAVES, SPINES, SWITCHES, answers,
                       answers_within, bfd_problems, config_problems, ecmp_problems, eventually,
                       in_parallel, isp_problems, leaf_route_problems, report, session_problems,
-                      vni_problems)
+                      run, vni_problems)
 
 
 # ---- Every router runs exactly what Git says -----------------------------------------------------
@@ -20,6 +23,18 @@ def test_every_router_runs_exactly_its_rendered_config(node):
     template made frr-reload switch BFD off), and the server's drift check would alarm forever."""
     found = eventually(lambda: config_problems(node))
     assert not found, report(f"{node} running config differs from rendered/{node}/frr.conf", found)
+
+
+@pytest.mark.parametrize("node", SWITCHES)
+def test_a_reload_of_the_rendered_config_works_and_changes_nothing(node):
+    """The deploy agent changes running routers with frr-reload, so reloading the config a router
+    already runs must succeed and leave it as it was. The first real deploy failed right here:
+    frr-reload tried to save into /etc/frr, which is read only on purpose, and reported failure."""
+    wanted = (Path("rendered") / node / "frr.conf").read_text()
+    applied, why = frr.reload(lambda *command, stdin=None: run(node, *command, stdin=stdin), wanted)
+    assert applied, report(f"{node}: frr-reload failed", why)
+    found = eventually(lambda: config_problems(node))
+    assert not found, report(f"{node} differs from rendered/{node}/frr.conf after the reload", found)
 
 
 # ---- Control plane -------------------------------------------------------------------------------
