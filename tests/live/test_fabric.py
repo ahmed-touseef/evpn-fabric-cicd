@@ -5,9 +5,21 @@ being checked, the intent is what it must obey.
 """
 import pytest
 
-from labtools import (ALLOWED, BORDERS, DEVICES, FORBIDDEN, LEAVES, SWITCHES, answers, answers_within,
-                      ecmp_problems, eventually, in_parallel, isp_problems, leaf_route_problems, report,
-                      session_problems, vni_problems)
+from labtools import (ALLOWED, BORDERS, DEVICES, FORBIDDEN, LEAVES, SPINES, SWITCHES, answers,
+                      answers_within, bfd_problems, config_problems, ecmp_problems, eventually,
+                      in_parallel, isp_problems, leaf_route_problems, report, session_problems,
+                      vni_problems)
+
+
+# ---- Every router runs exactly what Git says -----------------------------------------------------
+
+@pytest.mark.parametrize("node", SWITCHES)
+def test_every_router_runs_exactly_its_rendered_config(node):
+    """frr-reload works out what a reload of the rendered config would still change on the running
+    router: it must be nothing. Otherwise a deploy would send commands nobody wrote (an earlier
+    template made frr-reload switch BFD off), and the server's drift check would alarm forever."""
+    found = eventually(lambda: config_problems(node))
+    assert not found, report(f"{node} running config differs from rendered/{node}/frr.conf", found)
 
 
 # ---- Control plane -------------------------------------------------------------------------------
@@ -17,6 +29,14 @@ def test_every_bgp_session_is_up_to_the_right_neighbour(node):
     """Also proves the cabling: the session on eth11 of spine1 must lead to leaf1, and so on."""
     found = eventually(lambda: session_problems(node))
     assert not found, report(f"{node} BGP sessions", found)
+
+
+@pytest.mark.parametrize("node", SPINES + LEAVES + BORDERS)
+def test_bfd_watches_every_fabric_link(node):
+    """BFD up on every cable between spines and leaves, with the timers of the intent: it is what
+    turns a dead neighbour into a rerouted packet in 300 ms instead of 9 s."""
+    found = eventually(lambda: bfd_problems(node))
+    assert not found, report(f"{node} BFD", found)
 
 
 @pytest.mark.parametrize("node", LEAVES + BORDERS)

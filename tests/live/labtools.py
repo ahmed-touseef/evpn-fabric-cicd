@@ -11,8 +11,9 @@ import json
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
-from fabctl import intent as intent_file, model
+from fabctl import frr, intent as intent_file, model
 
 INTENT = intent_file.load()
 LAB = INTENT["fabric"]["name"]
@@ -29,11 +30,12 @@ SETTLE_S = 20             # after that, how long any single check may take to co
 
 # ---- Reaching the lab ----------------------------------------------------------------------------
 
-def run(node, *command, timeout=30):
-    """Runs a command inside one container of the lab."""
+def run(node, *command, timeout=30, stdin=None):
+    """Runs a command inside one container of the lab, optionally feeding it text on stdin."""
+    feed = ["-i"] if stdin is not None else []
     try:
-        return subprocess.run(["sudo", "docker", "exec", f"clab-{LAB}-{node}", *command],
-                              capture_output=True, text=True, timeout=timeout)
+        return subprocess.run(["sudo", "docker", "exec", *feed, f"clab-{LAB}-{node}", *command],
+                              input=stdin, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         return subprocess.CompletedProcess(command, 124, "", "timed out")
 
@@ -104,6 +106,36 @@ def session_problems(node):
              if (vrf, peer) in have and have[(vrf, peer)] != who] +
             [f"{vrf} {peer}: established, but the intent has no such session" for (vrf, peer) in have
              if (vrf, peer) not in want])
+
+
+def bfd_problems(node):
+    """BFD must be up on every fabric link of a switch, with the timers of the intent."""
+    bfd = INTENT["fabric"]["bfd"]
+    raw = vtysh_json(node, "show bfd peers json")
+    peers = {p.get("interface"): p for p in raw} if isinstance(raw, list) else {}
+    found = []
+    for port in sorted(p["name"] for p in DEVICES[node]["ports"]):
+        peer = peers.get(port)
+        if not peer:
+            found.append(f"{port}: no BFD session")
+        elif peer.get("status") != "up":
+            found.append(f"{port}: BFD is {peer.get('status')}")
+        elif (peer.get("transmit-interval"), peer.get("detect-multiplier")) != (bfd["interval_ms"], bfd["multiplier"]):
+            found.append(f"{port}: BFD every {peer.get('transmit-interval')} ms x {peer.get('detect-multiplier')}, "
+                         f"the intent says {bfd['interval_ms']} ms x {bfd['multiplier']}")
+    return found
+
+
+# ---- The running config against Git -------------------------------------------------------------
+
+def config_problems(node):
+    """What a reload of the rendered config would still change on the running router: must be nothing."""
+    wanted = (Path("rendered") / node / "frr.conf").read_text()
+    result = frr.changes(lambda *command, stdin=None: run(node, *command, stdin=stdin), wanted)
+    if result is None:
+        return ["frr-reload could not compare the running config with the rendered one"]
+    delete, add = result
+    return [f"would delete  {line}" for line in delete] + [f"would add     {line}" for line in add]
 
 
 # ---- EVPN ----------------------------------------------------------------------------------------
@@ -203,8 +235,11 @@ def isp_problems(borders=None):
 
 
 def healthy_problems():
-    """Everything a whole fabric must show at once: sessions, ECMP, routing tables, the ISP view."""
+    """Everything a whole fabric must show at once: sessions, BFD, configs exactly as in Git, ECMP,
+    routing tables and the ISP view."""
     found = [f"{n} {p}" for n in SWITCHES for p in session_problems(n)]
+    found += [f"{n} {p}" for n in SPINES + LEAVES + BORDERS for p in bfd_problems(n)]
+    found += [f"{n} {p}" for n in SWITCHES for p in config_problems(n)]
     found += [f"{n} {p}" for n in LEAVES + BORDERS for p in ecmp_problems(n)]
     found += [f"{n} {p}" for n in LEAVES for p in leaf_route_problems(n)]
     found += [f"isp {p}" for p in isp_problems()]

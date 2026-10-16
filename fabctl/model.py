@@ -9,6 +9,22 @@ def loopback(intent, switch_id):
     return str(ipaddress.ip_network(intent["fabric"]["loopbacks"])[switch_id])
 
 
+# FRR leaves its own defaults out of the running config. A rendered config that writes one anyway
+# never matches the running router: the drift check would flag it forever.
+FRR_BFD_DEFAULTS = {"interval_ms": 300, "multiplier": 3}
+
+
+def bfd_profile(intent):
+    """The lines of the BFD profile as FRR itself writes them: only the values that differ from its defaults."""
+    bfd = intent["fabric"]["bfd"]
+    lines = []
+    if bfd["interval_ms"] != FRR_BFD_DEFAULTS["interval_ms"]:
+        lines += [f"transmit-interval {bfd['interval_ms']}", f"receive-interval {bfd['interval_ms']}"]
+    if bfd["multiplier"] != FRR_BFD_DEFAULTS["multiplier"]:
+        lines.append(f"detect-multiplier {bfd['multiplier']}")
+    return lines
+
+
 def spines(intent):
     """One entry per spine. Spine port eth<N> goes to the leaf or border with id N."""
     below = {**intent["leaves"], **intent["borders"]}
@@ -20,6 +36,7 @@ def spines(intent):
             "loopback": loopback(intent, spine["id"]),
             "loopbacks": intent["fabric"]["loopbacks"],
             "bfd": intent["fabric"]["bfd"],
+            "bfd_profile": bfd_profile(intent),
             "ports": [{"name": f"eth{sw['id']}", "peer": peer}
                       for peer, sw in sorted(below.items(), key=lambda kv: kv[1]["id"])],
         }
@@ -52,6 +69,7 @@ def leaves(intent):
             "loopback": loopback(intent, leaf["id"]),
             "loopbacks": intent["fabric"]["loopbacks"],
             "bfd": intent["fabric"]["bfd"],
+            "bfd_profile": bfd_profile(intent),
             "rt": rt,
             "ports": uplinks(intent),
             "tenants": [tenants[t] for t in sorted(tenants)],
@@ -78,6 +96,7 @@ def borders(intent):
             "loopback": loopback(intent, border["id"]),
             "loopbacks": intent["fabric"]["loopbacks"],
             "bfd": intent["fabric"]["bfd"],
+            "bfd_profile": bfd_profile(intent),
             "rt": intent["fabric"]["route_target_asn"],
             "ports": uplinks(intent),
             "tenant": tenant,

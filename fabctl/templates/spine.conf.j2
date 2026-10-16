@@ -17,9 +17,9 @@ exit
 {% endfor %}
 bfd
  profile FABRIC
-  transmit-interval {{ bfd.interval_ms }}
-  receive-interval {{ bfd.interval_ms }}
-  detect-multiplier {{ bfd.multiplier }}
+{% for line in bfd_profile %}
+  {{ line }}
+{% endfor %}
  exit
 exit
 !
@@ -27,6 +27,7 @@ router bgp {{ asn }}
  bgp router-id {{ loopback }}
  neighbor FABRIC peer-group
  neighbor FABRIC remote-as external
+ neighbor FABRIC bfd
  neighbor FABRIC bfd profile FABRIC
 {% for port in ports %}
  neighbor {{ port.name }} interface peer-group FABRIC
