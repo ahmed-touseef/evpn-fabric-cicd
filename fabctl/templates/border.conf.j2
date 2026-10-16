@@ -79,7 +79,7 @@ exit
 ip prefix-list LOOPBACKS seq 10 permit {{ loopbacks }} ge 32
 {% if tenant %}
 ip prefix-list DEFAULT seq 10 permit 0.0.0.0/0
-ip prefix-list SUMMARY seq 10 permit {{ tenant.summary }}
+ip prefix-list SUMMARY seq 10 permit {{ tenant.summary }} le 24
 {% endif %}
 !
 route-map LOOPBACKS-ONLY permit 10
