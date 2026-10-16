@@ -85,6 +85,8 @@ function overall() {
     mark.className = "mark warn";
     text.textContent = fetchFailed ? "Status not available" : "Loading the latest status";
     sub.textContent = fetchFailed ? "status.json could not be read. The collector on the server may be stopped." : "";
+    $("overall").dataset.state = fetchFailed ? "warn" : "wait";
+    live(fetchFailed ? "off" : "", fetchFailed ? "Offline" : "Connecting");
     return;
   }
   const age = Date.now() / 1000 - status.generated;
@@ -103,6 +105,8 @@ function overall() {
   }
   mark.className = `mark ${state}`;
   text.textContent = line;
+  $("overall").dataset.state = state;
+  live(age > STALE_S || fetchFailed ? "off" : "on", age > STALE_S || fetchFailed ? `Stale, ${ago(age)} old` : "Live");
 
   const parts = [];
   if (status.running) {
@@ -117,9 +121,61 @@ function overall() {
   sub.textContent = parts.join(" ");
 }
 
+function live(state, text) {
+  $("live").className = `live ${state}`;
+  $("live-text").textContent = text;
+}
+
+// ---- The fabric in numbers -----------------------------------------------------------------------
+
+function stats() {
+  const list = $("stats");
+  list.replaceChildren();
+  const sum = (key) => status.routers.reduce((acc, r) => {
+    if (r[key]) { acc.up += r[key].up; acc.want += r[key].want; }
+    return acc;
+  }, { up: 0, want: 0 });
+  const tile = (label, have, total, sub, state) => {
+    const ratio = total ? Math.min(1, have / total) : 0;
+    const value = h("span", { class: "stat-value" }, String(have), total != null ? h("small", { text: ` / ${total}` }) : null);
+    let meter = null;
+    if (total) {
+      const fill = h("i");
+      fill.style.width = `${(ratio * 100).toFixed(1)}%`;     // CSSOM, which the CSP allows; a style attribute it would block
+      meter = h("span", { class: "meter" }, fill);
+    }
+    list.append(h("li", { class: `stat ${state || (total && have < total ? "bad" : "")}` },
+      h("span", { class: "stat-label", text: label }), value, h("span", { class: "stat-sub", text: sub }), meter));
+  };
+  const healthy = status.routers.filter((r) => r.answers && !r.problems.length).length;
+  tile("Routers healthy", healthy, status.routers.length, "answering, no problems");
+  const bgp = sum("sessions"), bfd = sum("bfd");
+  tile("BGP sessions", bgp.up, bgp.want, "established, as the intent wants");
+  tile("BFD peers", bfd.up, bfd.want, `every ${status.fabric.bfd.interval_ms} ms, ${status.fabric.bfd.multiplier} missed`);
+  const up = status.cables.filter((c) => c.state === "up").length;
+  tile("Cables up", up, status.cables.length, "fabric, servers and ISP");
+  const right = status.reach.filter((p) => p.allowed === p.answers).length;
+  tile("Reachability", right, status.reach.length, "server pairs as the intent wants");
+  const g = status.gameday;
+  if (!g) {
+    list.append(h("li", { class: "stat" }, h("span", { class: "stat-label", text: "Last game day" }),
+      h("span", { class: "stat-value", text: "None" }), h("span", { class: "stat-sub", text: "first run tonight, 03:30 UTC" })));
+  } else if (g.running) {
+    list.append(h("li", { class: "stat warn" }, h("span", { class: "stat-label", text: "Game day" }),
+      h("span", { class: "stat-value", text: "Running" }), h("span", { class: "stat-sub", text: `started ${ago(secondsSince(g.started))} ago` })));
+  } else {
+    const m = g.measured || {};
+    const worst = [m.spine_cut_worst_outage_s, m.border_down_worst_outage_s, ...Object.values(m.frozen_spine_noticed_s || {})]
+      .filter((v) => v != null);
+    const sub = worst.length && m.budget_s != null ? `worst ${Math.max(...worst).toFixed(2)} s, budget ${m.budget_s} s` : `${ago(secondsSince(g.time))} ago`;
+    list.append(h("li", { class: `stat ${g.passed ? "" : "bad"}` }, h("span", { class: "stat-label", text: "Last game day" }),
+      h("span", { class: "stat-value", text: g.passed ? "Passed" : "Failed" }), h("span", { class: "stat-sub", text: sub })));
+  }
+}
+
 // ---- Map -----------------------------------------------------------------------------------------
 
-const MAP = { width: 1000, spineY: 58, leafY: 196, serverY: 318, boxW: 88, boxH: 32, serverGap: 62, spineGap: 300 };
+const MAP = { width: 1000, spineY: 40, leafY: 186, serverY: 312, boxW: 96, boxH: 34, serverGap: 62, spineGap: 300 };
 
 function layout() {
   const roles = (role) => status.routers.filter((r) => r.role === role).map((r) => r.name);
@@ -153,9 +209,9 @@ function drawMap() {
   clearSvg(svg);
   const at = layout();
   const routers = byName(status.routers), servers = byName(status.servers);
-  const top = (n) => [at[n][0], at[n][1] - (servers[n] ? 7 : MAP.boxH / 2)];
+  const top = (n) => [at[n][0], at[n][1] - (servers[n] ? 8 : MAP.boxH / 2)];
   const bottom = (n) => [at[n][0], at[n][1] + MAP.boxH / 2];
-  const cables = s("g"), nodes = s("g");
+  const cables = s("g"), flows = s("g", { "aria-hidden": "true" }), nodes = s("g");
 
   for (const c of status.cables) {
     let a, b;
@@ -167,6 +223,7 @@ function drawMap() {
     const line = s("line", { class: `cable ${cls}`, x1: a[0], y1: a[1], x2: b[0], y2: b[1] });
     line.append(s("title", {}, `${c.a} ${c.a_port} to ${c.b} ${c.b_port}: ${c.state}`));
     cables.append(line);
+    if (c.state === "up") flows.append(s("line", { class: "flow", x1: a[0], y1: a[1], x2: b[0], y2: b[1] }));
   }
 
   if (routers.isp) {                                                      // the ISP's way out
@@ -180,9 +237,10 @@ function drawMap() {
     if (!at[r.name]) continue;
     const [x, y] = at[r.name];
     const cls = !r.answers ? "silent" : r.problems.length ? "bad" : "";
-    const g = s("g", { class: `router ${cls}` });
-    g.append(s("rect", { class: "box", x: x - MAP.boxW / 2, y: y - MAP.boxH / 2, width: MAP.boxW, height: MAP.boxH, rx: 3 }));
-    g.append(s("text", { class: "name", x, y: y + 5, "text-anchor": "middle" }, r.name));
+    const g = s("g", { class: `router ${r.role} ${cls}` });
+    g.append(s("rect", { class: "box", x: x - MAP.boxW / 2, y: y - MAP.boxH / 2, width: MAP.boxW, height: MAP.boxH, rx: 8 }));
+    g.append(s("circle", { class: "dot", cx: x - MAP.boxW / 2 + 14, cy: y, r: 3.5 }));
+    g.append(s("text", { class: "name", x: x + 6, y: y + 4.5, "text-anchor": "middle" }, r.name));
     const asnY = r.role === "spine" ? y - MAP.boxH / 2 - 7 : y + MAP.boxH / 2 + 14;
     g.append(s("text", { class: "asn label-bg", x, y: asnY, "text-anchor": "middle" }, `AS${r.asn}`));
     const facts = [`${r.name}, ${r.role}, AS${r.asn}`];
@@ -198,7 +256,7 @@ function drawMap() {
   for (const x of status.servers) {
     const [cx, cy] = at[x.name];
     const g = s("g", { class: `server ${x.tenant}${lost.has(x.name) ? " lost" : ""}` });
-    g.append(s("rect", { x: cx - 7, y: cy - 7, width: 14, height: 14, rx: 2 }));
+    g.append(s("rect", { x: cx - 8, y: cy - 8, width: 16, height: 16, rx: 4 }));
     g.append(s("text", { class: "name label-bg", x: cx, y: cy + 24, "text-anchor": "middle" }, x.name));
     g.append(s("text", { class: "asn label-bg", x: cx, y: cy + 38, "text-anchor": "middle" }, `vlan ${x.vlan}`));
     g.append(s("title", {}, `${x.name}, ${x.address}, tenant ${x.tenant}, VLAN ${x.vlan}, on ${x.leaf}` +
@@ -206,13 +264,11 @@ function drawMap() {
     nodes.append(g);
   }
   const bfd = status.fabric.bfd;
-  const notes = s("g", { class: "design" });
-  [["underlay", `eBGP unnumbered, BFD ${bfd.interval_ms} ms x ${bfd.multiplier}`],
-   ["overlay", "EVPN, VXLAN, symmetric IRB"],
-   ["gateway", "anycast .1 on every leaf"]].forEach(([k, v], i) => {
-    notes.append(s("text", { class: "key", x: 0, y: 18 + i * 18 }, k), s("text", { class: "value", x: 88, y: 18 + i * 18 }, v));
-  });
-  svg.append(notes, cables, nodes);
+  $("map-facts").replaceChildren(...[
+    ["underlay", `eBGP unnumbered, BFD ${bfd.interval_ms} ms x ${bfd.multiplier}`],
+    ["overlay", "EVPN, VXLAN, symmetric IRB"],
+    ["gateway", "anycast .1 on every leaf"]].map(([k, v]) => h("li", {}, h("b", { text: k }), v)));
+  svg.append(cables, flows, nodes);
 
   const broken = status.cables.filter((c) => c.state !== "up");
   $("map-note").textContent = broken.length
@@ -430,7 +486,7 @@ function events() {
   list.replaceChildren();
   const history = status.agent.history || [];
   if (!history.length) {
-    list.append(h("li", {}, h("span", { class: "empty", text: "Nothing yet." })));
+    list.append(h("li", { class: "none" }, h("span", { class: "empty", text: "Nothing yet." })));
     return;
   }
   for (const e of history) {
@@ -438,7 +494,7 @@ function events() {
     const text = h("span", {}, h("span", { class: `what ${cls}`, text: what }), link ? " " : "", link, rest);
     const detail = (e.detail || []).slice(0, 4).map((l) => l.replace(/\s+/g, " ").trim()).join(" | ");
     if (detail && e.event !== "deployed") text.append(h("span", { class: "detail", text: detail }));
-    list.append(h("li", {}, h("time", { datetime: e.time }, day(e.time), h("br"), clock(e.time)), text));
+    list.append(h("li", { class: cls }, h("time", { datetime: e.time }, day(e.time), h("br"), clock(e.time)), text));
   }
 }
 
@@ -487,7 +543,7 @@ function edge() {
 function draw() {
   overall();
   if (!status) return;
-  for (const part of [drawMap, facts, gameday, reach, routers, events, edge]) {
+  for (const part of [stats, drawMap, facts, gameday, reach, routers, events, edge]) {
     try {
       part();
     } catch (error) {
