@@ -1,6 +1,9 @@
 #!/bin/sh
 # isp: Linux side of the simulated ISP. Generated from intent/fabric.yml by fabctl render.
 set -e
-sysctl -qw net.ipv4.ip_forward=1
+# IPv4 only. IPv6 forwarding is switched off explicitly: whether a fresh container starts with it
+# on depends on the host (on in the lab, off on GitHub), and FRR lists it in the running config
+# when it is on, so leaving it to chance makes the running config differ from Git on one of them.
+sysctl -qw net.ipv4.ip_forward=1 net.ipv6.conf.all.forwarding=0
 ip link set eth21 up
 ip link set eth22 up
