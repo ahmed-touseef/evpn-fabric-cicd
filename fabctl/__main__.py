@@ -63,13 +63,13 @@ def snapshot():
 
 def agent():
     from .agent import main
-    return main()
+    return main(sys.argv[2:])
 
 
 COMMANDS = {"check": lambda: 0 if check() else 1, "render": render, "snapshot": snapshot, "agent": agent}
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2 or sys.argv[1] not in COMMANDS:
+    if len(sys.argv) < 2 or sys.argv[1] not in COMMANDS or (len(sys.argv) > 2 and sys.argv[1] != "agent"):
         print(__doc__.strip())
         sys.exit(2)
     sys.exit(COMMANDS[sys.argv[1]]())
