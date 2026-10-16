@@ -19,10 +19,13 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Install the tools
-        run: sudo apt-get update -q && sudo apt-get install -y -q python3-yaml python3-jinja2 shellcheck
+        run: sudo apt-get update -q && sudo apt-get install -y -q python3-yaml python3-jinja2 python3-pytest shellcheck
 
       - name: The intent has no mistakes
         run: python3 -m fabctl check
+
+      - name: The deploy agent decides correctly
+        run: python3 -m pytest tests/unit -q -p no:cacheprovider
 
       - name: The committed configs match the intent
         run: |

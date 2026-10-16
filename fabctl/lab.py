@@ -1,5 +1,5 @@
-"""What the live tests share: how to reach the lab, how to wait for it, and what a healthy fabric
-looks like according to intent/fabric.yml.
+"""Probes for the running lab, shared by the live tests and the deploy agent: how to reach the lab,
+how to wait for it, and what a healthy fabric looks like according to intent/fabric.yml.
 
 Every expectation is computed from the intent, never read from the running network: the network
 is what is being checked, the intent is what it must obey. Nothing here sleeps for a fixed time.
@@ -13,7 +13,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from fabctl import frr, intent as intent_file, model
+from . import frr, intent as intent_file, model
 
 INTENT = intent_file.load()
 LAB = INTENT["fabric"]["name"]

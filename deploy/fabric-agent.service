@@ -1,0 +1,13 @@
+# The deploy agent, one cycle per run: see fabctl/agent.py. Started every minute by fabric-agent.timer.
+# Install: sudo cp deploy/fabric-agent.* /etc/systemd/system/ && sudo systemctl enable --now fabric-agent.timer
+[Unit]
+Description=Fabric deploy agent: make the lab run what main says
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/fabric
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m fabctl agent
+TimeoutStartSec=30min

@@ -1,0 +1,11 @@
+# One agent cycle a minute after the previous one ended, so two cycles never overlap.
+[Unit]
+Description=Run the fabric deploy agent every minute
+
+[Timer]
+OnBootSec=1min
+OnUnitInactiveSec=1min
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

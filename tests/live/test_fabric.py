@@ -1,11 +1,11 @@
 """Live tests of the healthy fabric that lab/deploy.sh booted on this machine.
 
-Every expectation comes from intent/fabric.yml (see labtools.py): the running network is what is
+Every expectation comes from intent/fabric.yml (see fabctl/lab.py): the running network is what is
 being checked, the intent is what it must obey.
 """
 import pytest
 
-from labtools import (ALLOWED, BORDERS, DEVICES, FORBIDDEN, LEAVES, SPINES, SWITCHES, answers,
+from fabctl.lab import (ALLOWED, BORDERS, DEVICES, FORBIDDEN, LEAVES, SPINES, SWITCHES, answers,
                       answers_within, bfd_problems, config_problems, ecmp_problems, eventually,
                       in_parallel, isp_problems, leaf_route_problems, report, session_problems,
                       vni_problems)
