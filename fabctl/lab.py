@@ -8,6 +8,7 @@ longer, never wrong.
 """
 import ipaddress
 import json
+import os
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -26,6 +27,7 @@ BORDERS = [n for n in SWITCHES if DEVICES[n]["role"] == "border"]
 INTERNET = INTENT["isp"]["internet_host"]
 BOOT_S = 120              # all BGP sessions came up in about 4 s on GitHub's machine; this is the ceiling
 SETTLE_S = 20             # after that, how long any single check may take to come true
+SUDO = [] if os.geteuid() == 0 else ["sudo"]      # the agent runs as root already; people and the pipeline do not
 
 
 # ---- Reaching the lab ----------------------------------------------------------------------------
@@ -34,7 +36,7 @@ def run(node, *command, timeout=30, stdin=None):
     """Runs a command inside one container of the lab, optionally feeding it text on stdin."""
     feed = ["-i"] if stdin is not None else []
     try:
-        return subprocess.run(["sudo", "docker", "exec", *feed, f"clab-{LAB}-{node}", *command],
+        return subprocess.run([*SUDO, "docker", "exec", *feed, f"clab-{LAB}-{node}", *command],
                               input=stdin, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         return subprocess.CompletedProcess(command, 124, "", "timed out")
@@ -42,7 +44,7 @@ def run(node, *command, timeout=30, stdin=None):
 
 def docker(action, node):
     """docker pause, unpause and so on, for one container of the lab."""
-    subprocess.run(["sudo", "docker", action, f"clab-{LAB}-{node}"], check=True, capture_output=True)
+    subprocess.run([*SUDO, "docker", action, f"clab-{LAB}-{node}"], check=True, capture_output=True)
 
 
 def vtysh_json(node, command):

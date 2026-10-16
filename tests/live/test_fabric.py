@@ -34,7 +34,7 @@ def test_every_bgp_session_is_up_to_the_right_neighbour(node):
 @pytest.mark.parametrize("node", SPINES + LEAVES + BORDERS)
 def test_bfd_watches_every_fabric_link(node):
     """BFD up on every cable between spines and leaves, with the timers of the intent: it is what
-    turns a dead neighbour into a rerouted packet in 300 ms instead of 9 s."""
+    turns a dead neighbour into a rerouted packet in well under a second instead of 9 s."""
     found = eventually(lambda: bfd_problems(node))
     assert not found, report(f"{node} BFD", found)
 
