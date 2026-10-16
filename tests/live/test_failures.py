@@ -10,7 +10,7 @@ import time
 
 import pytest
 
-from labtools import (ALLOWED, BORDERS, DEVICES, INTENT, LAB, LEAVES, SPINES, SWITCHES, address,
+from fabctl.lab import (ALLOWED, BORDERS, DEVICES, INTENT, LAB, LEAVES, SPINES, SWITCHES, address,
                       answers_within, docker, eventually, expected_sessions, healthy_problems,
                       in_parallel, isp_problems, leaf_route_problems, report, run, vtysh_json)
 

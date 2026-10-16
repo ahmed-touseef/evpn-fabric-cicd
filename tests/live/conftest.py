@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-from labtools import BOOT_S, SWITCHES, established, expected_sessions, in_parallel
+from fabctl.lab import BOOT_S, SWITCHES, established, expected_sessions, in_parallel
 
 
 @pytest.fixture(scope="session", autouse=True)

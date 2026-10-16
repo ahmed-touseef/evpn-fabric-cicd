@@ -2,6 +2,7 @@
     python3 -m fabctl check     look for mistakes in intent/fabric.yml
     python3 -m fabctl render    check, then write the configs into rendered/
     python3 -m fabctl snapshot  pack rendered/ into a Batfish snapshot in build/batfish/
+    python3 -m fabctl agent     on the server: deploy main once GitHub approves it, heal drift
 """
 import sys
 
@@ -60,7 +61,12 @@ def snapshot():
     return 0
 
 
-COMMANDS = {"check": lambda: 0 if check() else 1, "render": render, "snapshot": snapshot}
+def agent():
+    from .agent import main
+    return main()
+
+
+COMMANDS = {"check": lambda: 0 if check() else 1, "render": render, "snapshot": snapshot, "agent": agent}
 
 if __name__ == "__main__":
     if len(sys.argv) != 2 or sys.argv[1] not in COMMANDS:
