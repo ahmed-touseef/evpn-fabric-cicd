@@ -10,7 +10,7 @@ import time
 
 import pytest
 
-from fabctl.lab import (ALLOWED, BORDERS, DEVICES, INTENT, LAB, LEAVES, SPINES, SWITCHES, address,
+from fabctl.lab import (ALLOWED, BORDERS, DEVICES, INTENT, LAB, LEAVES, SPINES, SUDO, SWITCHES, address,
                       answers_within, docker, eventually, expected_sessions, healthy_problems,
                       in_parallel, isp_problems, leaf_route_problems, report, run, vtysh_json)
 
@@ -49,7 +49,7 @@ class Traffic:
 
     def __init__(self, pairs, seconds=8):
         self.flows = {pair: subprocess.Popen(
-            ["sudo", "docker", "exec", f"clab-{LAB}-{pair[0]}",
+            [*SUDO, "docker", "exec", f"clab-{LAB}-{pair[0]}",
              "ping", "-i", str(RATE_S), "-w", str(seconds), "-W", "1", address(pair[1])],
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True) for pair in pairs}
 
