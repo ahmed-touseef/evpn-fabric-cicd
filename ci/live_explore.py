@@ -153,6 +153,10 @@ for role in ("leaf", "border"):
     show(next(n for n in SWITCHES if DEVICES[n]["role"] == role), "show bgp vrf all summary")
 show("isp", "show bgp summary")
 
+section("BFD: liveness checks on the fabric links")
+for node in [n for n in SWITCHES if DEVICES[n]["role"] in ("spine", "leaf")][:2]:
+    show(node, "show bfd peers brief")
+
 section("EVPN: which VNIs each leaf carries, and how many other leaves share them")
 for node in [n for n in SWITCHES if DEVICES[n]["role"] == "leaf"]:
     show(node, "show evpn vni")
