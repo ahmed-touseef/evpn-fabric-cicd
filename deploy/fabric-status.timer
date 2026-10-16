@@ -1,0 +1,11 @@
+# One status collection 20 s after the previous one ended: about every 30 s.
+[Unit]
+Description=Refresh the fabric status page
+
+[Timer]
+OnBootSec=1min
+OnUnitInactiveSec=20s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,14 @@
+# The status collector behind https://cicd.touseefahmed.com: reads the lab, writes
+# /var/lib/fabric-status/status.json. See fabctl/status.py. Started by fabric-status.timer.
+[Unit]
+Description=Fabric status collector for the status page
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/fabric
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m fabctl status
+TimeoutStartSec=2min
+# Only reads the lab, so it gets less of the machine than the agent and the routers.
+Nice=10

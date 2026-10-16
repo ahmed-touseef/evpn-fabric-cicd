@@ -12,7 +12,7 @@ import pytest
 
 from fabctl.lab import (ALLOWED, BORDERS, DEVICES, INTENT, LAB, LEAVES, SPINES, SUDO, SWITCHES, address,
                       answers_within, docker, eventually, expected_sessions, healthy_problems,
-                      in_parallel, isp_problems, leaf_route_problems, report, run, vtysh_json)
+                      in_parallel, isp_problems, leaf_route_problems, measure, report, run, vtysh_json)
 
 BFD = INTENT["fabric"]["bfd"]
 DETECT_S = BFD["interval_ms"] * BFD["multiplier"] / 1000
@@ -53,10 +53,10 @@ class Traffic:
              "ping", "-i", str(RATE_S), "-w", str(seconds), "-W", "1", address(pair[1])],
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True) for pair in pairs}
 
-    def problems(self):
-        """Flows whose longest run of lost packets is longer than the budget."""
-        found = []
-        for (src, dst), flow in self.flows.items():
+    def outages(self):
+        """{flow: longest run of lost packets in seconds, or None if no answer came back at all}."""
+        result = {}
+        for pair, flow in self.flows.items():
             out = flow.communicate(timeout=60)[0]
             sent = int((re.search(r"(\d+) packets transmitted", out) or [0, 0])[1])
             got = {int(seq) for seq in re.findall(r"icmp_seq=(\d+)", out)}
@@ -64,11 +64,16 @@ class Traffic:
             for seq in range(1, sent + 1):
                 gap = 0 if seq in got else gap + 1
                 longest = max(longest, gap)
-            if not got:
-                found.append(f"{src} -> {dst}: no answer at all ({sent} sent)")
-            elif longest * RATE_S > BUDGET_S:
-                found.append(f"{src} -> {dst}: no answer for {longest * RATE_S:.2f} s, the intent allows {BUDGET}")
-        return found
+            result[pair] = round(longest * RATE_S, 2) if got else None
+        return result
+
+    def problems(self, name):
+        """Flows that lost more than the budget, after recording the worst outage under `name`."""
+        lost = self.outages()
+        measure(name, max((s for s in lost.values() if s is not None), default=0.0))
+        return [f"{src} -> {dst}: no answer at all" if s is None else
+                f"{src} -> {dst}: no answer for {s:.2f} s, the intent allows {BUDGET}"
+                for (src, dst), s in lost.items() if s is None or s > BUDGET_S]
 
 
 def noticed_after(node, port, since, limit_s=15):
@@ -88,6 +93,8 @@ def test_a_frozen_spine_is_dropped_within_the_bfd_budget(repairs):
     since = time.time()
     repairs.append(lambda: docker("unpause", SPINE))
     noticed = in_parallel(lambda n, port: noticed_after(n, port, since), watchers)
+    measure("budget_s", round(BUDGET_S, 2))
+    measure("frozen_spine_noticed_s", {n: round(t, 2) if t is not None else None for (n, _), t in noticed.items()})
     slow = [f"{n} noticed {SPINE} after {t:.2f} s, the intent allows {BUDGET}" if t is not None
             else f"{n} did not notice {SPINE} at all within 15 s" for (n, _), t in noticed.items()
             if t is None or t > BUDGET_S]
@@ -103,7 +110,7 @@ def test_traffic_survives_a_spine_losing_every_cable(repairs):
     time.sleep(2)                                   # a clean stretch of traffic before the cut
     cables(SPINE, "down")
     repairs.append(lambda: cables(SPINE, "up"))
-    found = traffic.problems()
+    found = traffic.problems("spine_cut_worst_outage_s")
     assert not found, report(f"While {SPINE} lost every cable", found)
 
 
@@ -112,7 +119,7 @@ def test_the_internet_survives_a_border_going_down(repairs):
     time.sleep(2)
     cables(BORDER, "down")
     repairs.append(lambda: cables(BORDER, "up"))
-    found = traffic.problems()
+    found = traffic.problems("border_down_worst_outage_s")
     assert not found, report(f"While {BORDER} went down", found)
 
     alive = [b for b in BORDERS if b != BORDER]

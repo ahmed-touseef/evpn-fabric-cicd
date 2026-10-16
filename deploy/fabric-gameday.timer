@@ -1,0 +1,11 @@
+# Every night at 03:30 UTC, when nobody is merging. A night missed while the server was off is
+# skipped, not caught up at boot, so it never runs on a lab that is still starting.
+[Unit]
+Description=Run the fabric game day every night
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 UTC
+Persistent=false
+
+[Install]
+WantedBy=timers.target
