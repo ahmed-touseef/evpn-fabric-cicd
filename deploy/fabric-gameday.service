@@ -1,0 +1,15 @@
+# Game day: break the production lab on purpose and measure how it copes. See fabctl/gameday.py.
+# Started every night by fabric-gameday.timer; installed by deploy/publish.sh.
+[Unit]
+Description=Fabric game day: failure tests against the production lab
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/fabric
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m fabctl gameday
+TimeoutStartSec=40min
+# Stopped early, it still unfreezes and reconnects everything before it exits.
+TimeoutStopSec=5min

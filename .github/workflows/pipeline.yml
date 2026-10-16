@@ -53,7 +53,10 @@ jobs:
           exit $failed
 
       - name: Shell scripts are clean
-        run: shellcheck -s sh rendered/*/interfaces.sh && shellcheck lab/deploy.sh && echo "all scripts clean"
+        run: shellcheck -s sh rendered/*/interfaces.sh && shellcheck lab/deploy.sh deploy/publish.sh && echo "all scripts clean"
+
+      - name: The status page script parses
+        run: node --check deploy/web/app.js && echo "deploy/web/app.js parses"
 
   batfish:
     name: Batfish

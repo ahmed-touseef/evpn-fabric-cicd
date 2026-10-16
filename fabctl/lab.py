@@ -30,6 +30,15 @@ SETTLE_S = 20             # after that, how long any single check may take to co
 SUDO = [] if os.geteuid() == 0 else ["sudo"]      # the agent runs as root already; people and the pipeline do not
 
 
+# What the failure tests measured during this run: printed at the end of every run, and saved
+# as JSON when FABRIC_REPORT names a file (the nightly game day does, for the status page).
+MEASURED = {}
+
+
+def measure(name, value):
+    MEASURED[name] = value
+
+
 # ---- Reaching the lab ----------------------------------------------------------------------------
 
 def run(node, *command, timeout=30, stdin=None):
@@ -100,8 +109,10 @@ def established(node):
     return found
 
 
-def session_problems(node):
-    want, have = expected_sessions(node), established(node)
+def session_problems(node, have=None):
+    """Sessions missing, leading to the wrong device, or not in the intent. `have` is what
+    established(node) returned, when the caller already asked."""
+    want, have = expected_sessions(node), established(node) if have is None else have
     return ([f"{vrf} {peer}: not established (should reach {who})" for (vrf, peer), who in want.items()
              if (vrf, peer) not in have] +
             [f"{vrf} {peer}: reaches {have[(vrf, peer)]}, the cabling says {who}" for (vrf, peer), who in want.items()

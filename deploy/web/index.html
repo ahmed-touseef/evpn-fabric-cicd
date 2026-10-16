@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EVPN fabric CI/CD</title>
+<meta name="description" content="Live status of an EVPN VXLAN data center fabric that only changes through a tested pipeline: intent in Git, Batfish proofs, a live lab on GitHub, and a pull based deploy agent.">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='2' y='2' width='12' height='4' rx='1' fill='%2318222c'/%3E%3Crect x='2' y='10' width='5' height='4' rx='1' fill='%2318222c'/%3E%3Crect x='9' y='10' width='5' height='4' rx='1' fill='%2318222c'/%3E%3C/svg%3E">
+</head>
+<body>
+<header class="top">
+  <div class="intro">
+    <h1>EVPN fabric, deployed by CI/CD</h1>
+    <p>Two spines, four leaves, two borders and an ISP, running in containerlab on this server. Nobody configures a router by hand: a change is a pull request, GitHub proves it, and the deploy agent here rolls it out. This page shows what the network sees right now.</p>
+  </div>
+  <div class="overall" aria-live="polite">
+    <p class="overall-main"><span class="mark" id="overall-mark"></span><span id="overall-text">Loading the latest status</span></p>
+    <p class="overall-sub" id="overall-sub"></p>
+  </div>
+</header>
+
+<main>
+  <section class="wide" aria-labelledby="map-h">
+    <div class="panel-head">
+      <h2 id="map-h">The fabric</h2>
+      <ul class="legend">
+        <li><span class="key key-up"></span>Cable up</li>
+        <li><span class="key key-nosession"></span>BGP down</li>
+        <li><span class="key key-down"></span>Cable down</li>
+        <li><span class="key key-prod"></span>prod</li>
+        <li><span class="key key-storage"></span>storage</li>
+      </ul>
+    </div>
+    <div class="map-scroll">
+      <svg id="map" viewBox="0 0 1000 410" role="img" aria-labelledby="map-title">
+        <title id="map-title">The routers, servers and cables of the fabric, colored by their current state</title>
+      </svg>
+    </div>
+    <p class="note" id="map-note"></p>
+  </section>
+
+  <section class="half" aria-labelledby="run-h">
+      <h2 id="run-h">What runs now</h2>
+      <dl class="facts" id="facts"></dl>
+  </section>
+
+  <section class="half" aria-labelledby="game-h">
+      <h2 id="game-h">Last game day</h2>
+      <p class="hint" id="game-hint">Every night at 03:30 UTC the failure tests run again on this lab: a spine is frozen, a spine loses every cable, a border goes down. Measured, not estimated.</p>
+      <p class="game-result" id="game-result"></p>
+      <svg id="game-chart" class="chart" role="img" aria-labelledby="game-chart-title"><title id="game-chart-title">Failover times from the last game day</title></svg>
+      <p class="note" id="game-budget"></p>
+      <ul class="failures" id="game-failures"></ul>
+  </section>
+
+  <section class="half" aria-labelledby="reach-h">
+    <h2 id="reach-h">Who reaches whom</h2>
+    <p class="hint">Every 30 s each server pings every other server and the internet. A tenant is its own VRF: prod reaches prod and the internet, storage reaches only storage.</p>
+    <div class="scroll"><table class="matrix" id="reach"></table></div>
+    <ul class="matrix-key">
+      <li><span class="cell yes"></span>answers, as the intent wants</li>
+      <li><span class="cell no"></span>no answer, as the intent wants</li>
+      <li><span class="cell bad"></span>wrong</li>
+    </ul>
+  </section>
+
+  <section class="half" aria-labelledby="routers-h">
+    <h2 id="routers-h">Routers</h2>
+    <p class="hint">BGP sessions and BFD as each router reports them, against what the intent says it must have.</p>
+    <div class="scroll"><table class="data" id="routers">
+      <thead><tr><th scope="col">Router</th><th scope="col">ASN</th><th scope="col">Loopback</th><th scope="col" class="num">BGP</th><th scope="col" class="num">BFD</th><th scope="col">State</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <ul class="problems" id="problems"></ul>
+  </section>
+
+  <section class="half" aria-labelledby="events-h">
+    <h2 id="events-h">Deploys and repairs</h2>
+    <p class="hint">What the deploy agent and the game day did, newest first.</p>
+    <ul class="events" id="events"></ul>
+  </section>
+
+  <section class="half" aria-labelledby="edge-h">
+    <h2 id="edge-h">Internet edge</h2>
+    <p class="hint">The borders announce one summary per tenant with internet access, and accept only a default route. Storage never leaves the fabric.</p>
+    <div class="scroll"><table class="data" id="received"></table></div>
+    <h3>Default route on each leaf</h3>
+    <div class="scroll"><table class="data" id="defaults">
+      <thead><tr><th scope="col">Leaf</th><th scope="col">Tenant</th><th scope="col">Next hops</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section class="wide about" aria-labelledby="about-h">
+    <h2 id="about-h">How a change reaches this network</h2>
+    <ol class="stages">
+      <li><h3>Intent</h3><p>One YAML file describes the fabric: switches and their AS numbers, tenants, VLANs, servers and their ports, the ISP policy, BFD timers. Nothing else is written by hand.</p></li>
+      <li><h3>Render</h3><p>Python and Jinja turn the intent into an FRR config and a Linux script for every device. Both are committed, so a pull request shows the exact config lines it changes.</p></li>
+      <li><h3>Static proofs</h3><p>FRR parses every config. Batfish then models the whole network from the configs alone and proves the intent: every session, route targets, tenant isolation, only summaries to the ISP.</p></li>
+      <li><h3>Live lab on GitHub</h3><p>The fabric boots in containerlab on GitHub's machine. 58 tests check sessions, BFD, ECMP, EVPN, routing tables and every ping, then freeze a spine, cut cables and stop a border, timing the failover.</p></li>
+      <li><h3>Deploy agent</h3><p>This server pulls main once all three checks are green; GitHub holds no key to it. Configs go out with frr-reload one router at a time, canary first, each checked before the next. Any failure rolls back.</p></li>
+      <li><h3>Every minute, every night</h3><p>Every minute the agent compares each router with Git and undoes anything typed by hand. Every night the failure tests run again here, and the numbers above come from that run.</p></li>
+    </ol>
+    <p class="credit">Built by Touseef Ahmed, <a href="https://www.touseefahmed.com">www.touseefahmed.com</a>. Source, configs and tests: <a href="https://github.com/ahmed-touseef/evpn-fabric-cicd">github.com/ahmed-touseef/evpn-fabric-cicd</a></p>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
